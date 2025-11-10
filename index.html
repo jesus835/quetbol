@@ -1457,6 +1457,7 @@
         const teamLogoCache = new Map();
         let flagCodesLoaded = false;
         let availableMatches = [];
+        let liveMatchesPool = [];
 
         const heroTestMatches = [
           {
@@ -1510,6 +1511,8 @@
             isTestMatch: true
           }
         ];
+
+        const PRIORITY_TEAM_PATTERNS = [/real madrid/i, /barcelona/i];
 
         const TEAM_NAME_ALIASES = {
           'fc barcelona': 'Barcelona',
@@ -1919,11 +1922,28 @@
           });
         };
 
+        const findPriorityMatch = (list, patterns = PRIORITY_TEAM_PATTERNS) => {
+          if (!Array.isArray(list) || !list.length) return null;
+          return list.find(match =>
+            patterns.some(pattern => pattern.test(match?.matchName ?? ''))
+          );
+        };
+
         const pickRandomMatch = () => {
+          const now = new Date();
+          if (liveMatchesPool.length) {
+            const priorityLive = findPriorityMatch(liveMatchesPool);
+            const baseLive =
+              priorityLive ??
+              liveMatchesPool[Math.floor(Math.random() * liveMatchesPool.length)];
+            return computeHeroContext(baseLive, now);
+          }
           if (availableMatches.length) {
-            const index = Math.floor(Math.random() * availableMatches.length);
-            const baseMatch = availableMatches[index];
-            return computeHeroContext(baseMatch);
+            const priorityAvailable = findPriorityMatch(availableMatches);
+            const baseMatch =
+              priorityAvailable ??
+              availableMatches[Math.floor(Math.random() * availableMatches.length)];
+            return computeHeroContext(baseMatch, now);
           }
           if (heroTestMatches.length) {
             const fallbackIndex = Math.floor(Math.random() * heroTestMatches.length);
@@ -2448,21 +2468,6 @@
               return match.dateTime >= now;
             });
 
-            const priorityPatterns = [/real madrid/i, /barcelona/i];
-            const priorityMatch = sameDayUpcoming.find(match =>
-              priorityPatterns.some(pattern => pattern.test(match.matchName))
-            );
-
-            const nextMatch =
-              priorityMatch ??
-              sameDayUpcoming[0] ??
-              matches.find(match => match.dateTime && match.dateTime >= now && !match.isFeminine) ??
-              matches[0];
-            if (nextMatch?.matchName) {
-              const heroContext = computeHeroContext(nextMatch, now);
-              setHeroMatch(heroContext);
-            }
-
             const liveMatches = matches.filter(match => {
               if (!match.dateTime || match.isFeminine) return false;
               if (match.date !== todayDate) return false;
@@ -2471,6 +2476,32 @@
                 now.getTime() - match.dateTime.getTime() <= 2 * 60 * 60 * 1000
               );
             });
+
+            liveMatchesPool = liveMatches.map(match => ({ ...match }));
+
+            let heroSource = null;
+            const priorityLiveMatch = findPriorityMatch(liveMatches);
+            if (priorityLiveMatch) {
+              heroSource = priorityLiveMatch;
+            } else if (liveMatches.length) {
+              const randomLiveIndex = Math.floor(Math.random() * liveMatches.length);
+              heroSource = liveMatches[randomLiveIndex];
+            } else {
+              const priorityUpcoming = findPriorityMatch(sameDayUpcoming);
+              heroSource =
+                priorityUpcoming ??
+                sameDayUpcoming[0] ??
+                matches.find(
+                  match => match.dateTime && match.dateTime >= now && !match.isFeminine
+                ) ??
+                matches[0] ??
+                null;
+            }
+
+            if (heroSource?.matchName) {
+              const heroContext = computeHeroContext(heroSource, now);
+              setHeroMatch(heroContext);
+            }
 
             const liveIds = new Set(liveMatches.map(match => match.id));
 
