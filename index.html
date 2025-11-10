@@ -997,6 +997,40 @@
         z-index: 40;
       }
 
+      .player-autoclick {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 45;
+      }
+
+      .player-autoclick button {
+        pointer-events: auto;
+        padding: 16px 32px;
+        border-radius: 999px;
+        border: none;
+        font-size: 16px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        cursor: pointer;
+        background: rgba(45, 125, 255, 0.85);
+        color: #fff;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+        transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+      }
+
+      .player-autoclick button:hover,
+      .player-autoclick button:focus-visible {
+        transform: translateY(-2px);
+        outline: none;
+        background: rgba(45, 125, 255, 1);
+        box-shadow: 0 22px 48px rgba(0, 0, 0, 0.45);
+      }
+
       .player-section[data-open="true"] {
         display: flex;
       }
@@ -1265,6 +1299,9 @@
       </div>
     </section>
     <section class="player-section" aria-label="Reproductor" aria-hidden="true" data-open="false">
+      <div class="player-autoclick">
+        <button id="autoCenterClick" type="button">Auto clic al centro</button>
+      </div>
       <div class="player-info">
         <h2>Reproduciendo ahora</h2>
         <p data-player-match class="player-current-match"></p>
@@ -2627,6 +2664,7 @@
         const playerContainer = playerSection?.querySelector('[data-player-container]');
         const playerSourcesContainer = playerSection?.querySelector('[data-player-sources]');
         const playerMatchLabel = playerSection?.querySelector('[data-player-match]');
+        const autoCenterButton = playerSection?.querySelector('#autoCenterClick');
         const playerInfo = playerSection?.querySelector('.player-info');
         let playerInfoHideTimeout = null;
 
@@ -2655,6 +2693,37 @@
           }
         };
         showPlayerInfo();
+
+        const dispatchClickAtCenter = () => {
+          if (!autoCenterButton) return;
+          const centerX = window.innerWidth / 2;
+          const centerY = window.innerHeight / 2;
+          const previousPointerState = autoCenterButton.style.pointerEvents;
+          autoCenterButton.style.pointerEvents = 'none';
+          try {
+            const target = document.elementFromPoint(centerX, centerY);
+            if (!target || target === autoCenterButton || autoCenterButton.contains(target)) {
+              console.warn('No hay ningún elemento disponible para el auto clic en el centro.');
+              return;
+            }
+            const events = ['pointerdown', 'mousedown', 'mouseup', 'click'];
+            events.forEach(type => {
+              const event = new MouseEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                clientX: centerX,
+                clientY: centerY,
+                view: window,
+                composed: true
+              });
+              target.dispatchEvent(event);
+            });
+          } finally {
+            autoCenterButton.style.pointerEvents = previousPointerState;
+          }
+        };
+
+        autoCenterButton?.addEventListener('click', dispatchClickAtCenter);
 
         const setLiveOpen = open => {
           if (!liveSection) return;
